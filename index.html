@@ -231,26 +231,22 @@ function renderV6Home(){
   const entry=plan.entries[i],reading=data(record('bible_reading',bibleReadingId(p.item_id,i)));
   if(!reading.done){next.push({entry:String(entry),name:plan.name||'Plano bíblico'});break;}
  }}
- const books=byKind('book').filter(r=>{const b=data(r);return b.title&&(!Number(b.total)||Number(b.current||0)<Number(b.total))});
+ const books=byKind('book').filter(r=>{const b=data(r);return b.title&&b.status!=='concluído'&&b.status!=='concluido'&&b.status!=='finalizado'&&(!Number(b.total)||Number(b.current||0)<Number(b.total))});
  const book=books[0]?data(books[0]):null;
  const habits=byKind('habit').filter(r=>activeOn(data(r),day));
  const habitsDone=habits.filter(r=>habitDone(r.item_id,day)).length;
  const tasks=byKind('task').filter(r=>data(r).kind!=='event'&&!data(r).done&&(!data(r).date||data(r).date<=day));
- const todayTasks=tasks.filter(r=>data(r).date===day);
+ const todayTasks=tasks.filter(r=>!data(r).date||data(r).date<=day);
  const devotionalDone=!!record('devotional',day)&&!!(dv.theme||dv.text||dv.learning||dv.god||dv.prayer||dv.application);
  const bibleDone=plans.length>0&&next.length===0;
- const all=3+(habits.length?1:0)+(todayTasks.length?1:0);
- const done=Number(bibleDone)+Number(devotionalDone)+Number(book&&Number(book.total)>0&&Number(book.current)>=Number(book.total))+(habits.length&&habitsDone===habits.length?1:0);
- const percent=Math.round(done/Math.max(1,all)*100);
  const item=(symbol,title,desc,destination,completed)=>`<button type="button" class="v64-row" onclick="go('${destination}')"><span class="v64-symbol" aria-hidden="true">${symbol}</span><span class="v64-info"><strong>${title}</strong><small>${esc(desc)}</small></span><span class="v64-indicator" aria-hidden="true">${completed?'✓':'›'}</span></button>`;
- target.innerHTML=`<div class="v64-head"><div><div class="eyebrow">MINHA JORNADA DE HOJE</div><h2>Seu dia em um olhar ✿</h2></div><span class="v64-count">${habitsDone}/${habits.length} hábitos</span></div>
- <div class="v64-list">
- ${item('✝','Bíblia',next.length?next[0].entry+' · '+next[0].name:plans.length?'Plano em dia':'Nenhum plano ativo','bible',bibleDone)}
- ${item('♡','Devocional',devotionalDone?'Registrado hoje':'Escrever reflexão de hoje','devotional',devotionalDone)}
- ${item('▤','Livro',book?book.title+(book.total?' · pág. '+(book.current||0)+'/'+book.total:' · pág. '+(book.current||0)):'Nenhum livro em andamento','books',false)}
- ${item('☑','Hábitos',habits.length?habitsDone+' de '+habits.length+' concluídos':'Nenhum previsto hoje','habits',habits.length>0&&habitsDone===habits.length)}
- ${item('◷','Tarefas',todayTasks.length?todayTasks.length+' para hoje'+(todayTasks[0]?' · '+data(todayTasks[0]).name:''):tasks.length?tasks.length+' pendente(s) de dias anteriores':'Nenhuma pendência para hoje','tasks',!tasks.length)}
- </div>`;
+ const visible=[];
+ if(plans.length)visible.push(item('✝','Bíblia',next.length?next[0].entry+' · '+next[0].name:'Plano em dia','bible',bibleDone));
+ visible.push(item('♡','Devocional',devotionalDone?'Registrado hoje':'Escrever reflexão de hoje','devotional',devotionalDone));
+ if(book)visible.push(item('▤','Livro',book.title+(book.total?' · pág. '+(book.current||0)+'/'+book.total:' · pág. '+(book.current||0)),'books',false));
+ if(habits.length)visible.push(item('☑','Hábitos',habitsDone+' de '+habits.length+' concluídos','habits',habitsDone===habits.length));
+ if(todayTasks.length)visible.push(item('◷','Tarefas',todayTasks.length+' pendente(s)'+(todayTasks[0]?' · '+(data(todayTasks[0]).name||data(todayTasks[0]).title||''):'') ,'tasks',false));
+ target.innerHTML=`<div class="v64-head"><div><div class="eyebrow">MINHA JORNADA DE HOJE</div><h2>Seu dia em um olhar ✿</h2></div>${habits.length?`<span class="v64-count">${habitsDone}/${habits.length} hábitos</span>`:''}</div><div class="v64-list">${visible.join('')}</div>`;
 }
 
 function renderV6Timeline(){const el=$('timelineResults');if(!el||!user)return;const month=$('timelineMonth')?.value||today().slice(0,7);const q=($('timelineSearch')?.value||'').toLocaleLowerCase('pt-BR');const events=[];for(const r of rows){const v=data(r);if(r.kind==='devotional')events.push({day:r.item_id.slice(0,10),label:'Devocional',title:v.theme||'Devocional',description:(v.reference||'')+' '+(v.text||v.learning||''),action:`openDevotional('${r.item_id}')`});if(r.kind==='bible_reading'&&v.done)events.push({day:v.day||(v.completed_at||'').slice(0,10),label:'Leitura bíblica',title:v.verse||'Leitura concluída',description:v.note||'',action:"go('bible')"});if(r.kind==='prayer'&&v.status==='respondido')events.push({day:(v.history||[]).slice(-1)[0]?.day||v.day,label:'Oração respondida',title:v.title||'Pedido',description:v.detail||'',action:"go('prayers')"});if(r.kind==='verse')events.push({day:v.day||r.updated_at.slice(0,10),label:'Versículo',title:v.reference||'Versículo',description:v.topic||v.note||'',action:"go('verses')"});}const list=events.filter(x=>x.day?.startsWith(month)&&(`${x.label} ${x.title} ${x.description}`).toLocaleLowerCase('pt-BR').includes(q)).sort((a,b)=>b.day.localeCompare(a.day));el.innerHTML=list.length?list.map(x=>`<div class="v6-event"><strong>${esc(x.title)}</strong><small>${esc(x.label)} · ${dateLabel(x.day)}</small><p class="note">${esc(x.description).slice(0,220)}</p><button class="btn alt small" onclick="${x.action}">Abrir →</button></div>`).join(''):'<p class="muted">Nenhum registro encontrado neste período.</p>';}
